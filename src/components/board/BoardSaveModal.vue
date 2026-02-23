@@ -7,11 +7,24 @@
     <template #body>
       <div class="mb-3">
         <label class="form-label fw-bold">제목</label>
-        <input v-model="form.title" type="text" class="form-control" />
+        <input
+          id="board-title"
+          v-model="form.title"
+          type="text"
+          class="form-control"
+          maxlength="255"
+          required
+        />
       </div>
       <div class="mb-3">
         <label class="form-label fw-bold">내용</label>
-        <textarea v-model="form.content" class="form-control" rows="10"></textarea>
+        <textarea
+          id="board-content"
+          v-model="form.content"
+          class="form-control"
+          rows="10"
+          required
+        ></textarea>
       </div>
     </template>
 
@@ -25,39 +38,90 @@
 </template>
 
 <script setup>
-import { ref, reactive, watch } from 'vue';
-import MyModal from '../common/MyModal.vue';
-import MyAxios from '@/api/axios';
+import { ref, reactive } from 'vue'
+import MyModal from '../common/MyModal.vue'
+import MyAxios from '@/api/axios'
 
 const props = defineProps({
   mode: String,
-  boardData: Object
-});
-const emit = defineEmits(['refresh']);
+})
+const emit = defineEmits(['refresh'])
 
-const commonModalRef = ref(null);
-const form = reactive({ boardId: null, title: '', userSeq: '', content: '' });
+const commonModalRef = ref(null)
 
-// 데이터 매핑 및 초기화
-watch(() => props.boardData, (newVal) => {
-  if (newVal) Object.assign(form, newVal);
-  else resetForm();
-}, { deep: true });
+// 초기 상태 정의
+const initialForm = {
+  boardId: null,
+  title: '',
+  userSeq: '1', // 기본값 세팅
+  content: '',
+}
 
+const form = reactive({ ...initialForm })
+
+/**
+ * 폼 초기화 함수
+ */
+const resetForm = () => {
+  Object.assign(form, initialForm)
+}
+
+/**
+ * 모달 열기 (부모에서 호출)
+ * @param {Object} data - 수정 시 넘어오는 게시글 데이터
+ */
+const show = (data) => {
+  resetForm() // 일단 비우고
+  if (data) {
+    // 데이터가 있으면 덮어쓰기 (수정 모드)
+    Object.assign(form, data)
+  }
+  commonModalRef.value?.showModal()
+}
+
+const close = () => commonModalRef.value?.closeModal()
+
+/**
+ * form 검증 함수
+ */
+const validForm = () => {
+  if (!form.title.trim()) {
+    alert('제목을 입력해 주세요.')
+    document.getElementById('board-title').focus()
+    return false
+  }
+
+  if (!form.content.trim()) {
+    alert('내용을 입력해 주세요.')
+    document.getElementById('board-content').focus()
+    return false
+  }
+
+  return true
+}
+
+/**
+ * 저장/수정 로직
+ */
 const handleSave = async () => {
-  // 아래 코드 입시 작성 추후 변경 필요.
-  form.userSeq = '1';
+  // form 검증
+  if (!validForm()) return
 
-  const url = props.mode === 'SAVE' ? '/board/save' : `/board/update/${form.boardId}`;
-  const method = props.mode === 'SAVE' ? 'post' : 'put';
-  
-  await MyAxios[method](url, form);
-  emit('refresh');
-  close();
-};
+  try {
+    const isSave = props.mode === 'SAVE'
+    const url = isSave ? '/board/save' : `/board/update/${form.boardId}`
+    const method = isSave ? 'post' : 'put'
 
-const show = () => commonModalRef.value?.showModal();
-const close = () => commonModalRef.value?.closeModal();
+    // 서버의 GlobalExceptionHandler가 400 에러를 잡아서 메시지를 띄워줄 것입니다.
+    await MyAxios[method](url, form)
 
-defineExpose({ show, close });
+    emit('refresh')
+    close()
+  } catch (error) {
+    // 에러 처리는 axios 인터셉터에서 공통 처리됨
+    console.error('Board save error:', error)
+  }
+}
+
+defineExpose({ show, close })
 </script>
